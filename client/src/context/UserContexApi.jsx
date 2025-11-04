@@ -1,6 +1,6 @@
 import { useContext, createContext, useState, useEffect } from "react";
 const UserContext = createContext();
-function UserContext({ children }) {
+export const UserProvider = ({ children }) => {
   let [user, setUser] = useState(() => {
     const storedUser = localStorage.getItem("userData");
     return storedUser ? JSON.parse(storedUser) : null;
@@ -19,8 +19,16 @@ function UserContext({ children }) {
     localStorage.setItem("userData", JSON.stringify(newUserData));
   };
   return (
-    <UserContext.provider value={(user, updateUser, loading)}>
+    <UserContext.Provider value={{ user, updateUser, loading }}>
       {children}
-    </UserContext.provider>
+    </UserContext.Provider>
   );
-}
+};
+
+export const userUser = () => {
+  const context = useContext(UserContext);
+  if (!context) {
+    throw new Error("useUser must be used within a UserProvider");
+  }
+  return context;
+};

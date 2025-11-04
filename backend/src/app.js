@@ -9,6 +9,7 @@ import cookieParser from "cookie-parser";
 //...........................................................
 
 import authRoute from "./routes/authRoute.js";
+import userRoute from "./routes/userRoute.js";
 
 //...........................................................
 
@@ -18,7 +19,7 @@ const io = connectToSoket(server);
 
 //...........................................................
 
-const allowedOrigins = [];
+const allowedOrigins = ["http://localhost:5173"];
 app.use(
   cors({
     origin: function (origin, callback) {
@@ -44,6 +45,7 @@ app.use(cookieParser());
 //...........................................................
 
 app.use("/api/auth", authRoute);
+app.use("/api/user", userRoute);
 app.get("/", (req, res) => {
   res.json({ message: "Working" });
 });

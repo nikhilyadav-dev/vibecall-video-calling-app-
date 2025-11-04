@@ -3,8 +3,10 @@ import bcrypt from "bcrypt";
 import jwtToken from "../utils/jwtToken.js";
 export const signup = async (req, res) => {
   try {
-    let { username, fullname, email, password, pofileImg, gender } = req.body;
-    const user = User.findOne({ username });
+    let { username, fullname, email, password, profileImg, gender } = req.body;
+    const user = await User.findOne({ username });
+
+    console.log("Signup working", user);
 
     if (user)
       return res
@@ -12,18 +14,20 @@ export const signup = async (req, res) => {
         .send({ success: false, message: "User already exixt" });
 
     const emailCheck = await User.findOne({ email });
-    if (email)
+    if (emailCheck)
       return res
         .status(500)
         .send({ success: false, message: "User alredy exixt with this email" });
 
     const hashPassword = bcrypt.hashSync(password, 10);
     const maleProfileImg =
-      profilepic ||
+      profileImg ||
       `https://avatar.iran.liara.run/public/boy?username=${username}`;
     const femaleProfileImg =
-      profilepic ||
+      profileImg ||
       `https://avatar.iran.liara.run/public/girl?username=${username}`;
+
+    console.log(maleProfileImg, femaleProfileImg);
 
     const newUser = new User({
       username,
@@ -31,8 +35,10 @@ export const signup = async (req, res) => {
       email,
       password: hashPassword,
       gender,
-      pofileImg: gender === "male" ? maleProfileImg : femaleProfileImg,
+      profileImg: gender === "male" ? maleProfileImg : femaleProfileImg,
     });
+
+    console.log("newUser", newUser);
 
     if (newUser) {
       await newUser.save();
@@ -59,13 +65,13 @@ export const signup = async (req, res) => {
 
 export const login = async (req, res) => {
   try {
-    let { email, passowrd } = req.body;
-    const user = await findOne({ email });
+    let { email, password } = req.body;
+    const user = await User.findOne({ email });
     if (!user)
       return res
         .status(500)
         .send({ success: false, message: "Email doesn't exist" });
-    const passowrdCheck = bcrypt.compareSync(passowrd, user.passowrd || "");
+    const passowrdCheck = bcrypt.compareSync(password, user.password || "");
     if (!passowrdCheck)
       return res
         .status(500)

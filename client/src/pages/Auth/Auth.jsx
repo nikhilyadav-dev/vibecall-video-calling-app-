@@ -3,8 +3,10 @@ import toast, { Toaster } from "react-hot-toast";
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import apiClient from "../../apiClinet";
+import { userUser } from "../../context/UserContexApi";
 
 function Auth({ type }) {
+  const { updateUser } = userUser();
   let [loading, setLoading] = useState(false);
   let [formData, setFormData] = useState({
     fullname: "",
@@ -21,7 +23,7 @@ function Auth({ type }) {
     setFormData({ ...formData, [event.target.name]: event.target.value });
   };
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
     if (type === "signup" && formData.password !== formData.confirmPassword) {
       toast.error("Passowrd Doesn't Match");
@@ -30,14 +32,26 @@ function Auth({ type }) {
     setLoading(true);
     try {
       const endpoint = type === "signup" ? "/auth/signup" : "/auth/login";
-      const response = apiClient.post(endpoint, formData);
+      const response = await apiClient.post(endpoint, formData);
+
       toast.success(response.data.message || "Success");
-      if (type === "signup") {
+
+      if (type == "signup") {
         navigate("/login");
+      } else if (type == "login") {
+        updateUser(response.data);
+        const date = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
+        const expires = "expires=" + date.toUTCString();
+        document.cookie = `jwt=${response.data.token}; path=/; ${expires}`;
+        console.log("working login");
+        88888888888888888888889;
+        navigate("/");
       }
-      if (type === "/login") {
-      }
-    } catch (error) {}
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Something went wrong!");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
