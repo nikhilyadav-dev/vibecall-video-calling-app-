@@ -1,4 +1,3 @@
-import { useState, useEffect } from "react";
 import {
   FaBars,
   FaTimes,
@@ -9,22 +8,90 @@ import {
   FaMicrophoneSlash,
 } from "react-icons/fa";
 import { userUser } from "../../context/UserContexApi";
+import { useState, useEffect } from "react";
 import { RiLogoutBoxLine } from "react-icons/ri";
 import Lottie from "lottie-react";
 import wavingAnimation from "../../assets/waving.json";
 import apiClient from "../../apiClinet";
+import { useNavigate } from "react-router-dom";
+import { getSocket, setSocket } from "../components/VideoCallSoket";
+import { useRef } from "react";
+import Peer from "simple-peer";
 
 function Dashboard() {
+  //..........................................................
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [users, setUsers] = useState([]);
-  const [selectedUser, setSelectedUser] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [userOnline, setUserOnline] = useState([]);
   const { user, updateUser } = userUser();
+  const navigate = useNavigate();
 
+  //..........................................................
+
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [userOnline, setUserOnline] = useState([]);
+  const hasJoined = useRef(false);
+  const [me, setMe] = useState("");
   const [reciveCall, setReciveCall] = useState(false);
   const [callAccepted, setCallAccepted] = useState(false);
+  const [showRecieverDetailPopUp, setShowRecieverDetailPopUp] = useState(false);
+  const [recieverDetail, setrecieverDetail] = useState("");
+
+  const [callerWating, setCallerWating] = useState(false);
+  const reciverVideo = useRef(null);
+  const myVideo = useRef(null);
+  const [callerName, setCallerName] = useState("");
+  const [stream, setStream] = useState(null);
+
+  //..........................................................
+
+  const socket = getSocket();
+
+  useEffect(() => {
+    if (user && socket && !hasJoined.current) {
+      socket.emit("join", { id: user._id, name: user.username });
+      hasJoined.current = true;
+    }
+
+    socket.on("me", (id) => {
+      setMe(id);
+    });
+
+    socket.on("online-users", (onlineUsers) => {
+      setUserOnline(onlineUsers);
+    });
+
+    return () => {
+      socket.off("me");
+      socket.off("online-users");
+    };
+  }, [socket, user]);
+
+  const isOnlineUser = (userId) => userOnline.some((u) => u.userId === userId);
+
+  const startCall = async () => {
+    try {
+      const currentStram = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+        },
+      });
+      setStream(currentStram);
+      if (myVideo.current) {
+        myVideo.current.srcObject = currentStram;
+        myVideo.current.muted = true;
+        myVideo.current.volume = 0;
+      }
+    } catch (error) {
+      console.error("Error accessing media devices:", error);
+    }
+    console.log("working");
+  };
+
+  //..........................................................
 
   const filteredUsers = users.filter(
     (u) =>
@@ -32,29 +99,12 @@ function Dashboard() {
       u.email.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleLogout = async () => {
-    if (callAccepted || reciveCall) {
-      alert("You must end the call before logging out.");
-      return;
-    }
-    try {
-      await apiClient.post("/auth/logout");
-      socket.off("disconnect");
-      socket.disconnect();
-      socketInstance.setSocket();
-      updateUser(null);
-      localStorage.removeItem("userData");
-      navigate("/login");
-    } catch (error) {
-      console.error("Logout failed", error);
-    }
-  };
-
   const allusers = async () => {
     try {
       setLoading(true);
+
       const response = await apiClient.get("/user");
-      console.log("dashboard", response);
+
       if (response.data.success !== false) {
         setUsers(response.data.users);
       }
@@ -69,7 +119,34 @@ function Dashboard() {
     allusers();
   }, []);
 
-  const isOnlineUser = (userId) => userOnline.some((u) => u.userId === userId);
+  const handleLogout = async () => {
+    if (callAccepted || reciveCall) {
+      alert("You must end the call before logging out.");
+      return;
+    }
+    try {
+      await apiClient.post("/auth/logout");
+      socket.off("disconnect");
+      socket.disconnect();
+      setSocket();
+      updateUser(null);
+      localStorage.removeItem("userData");
+      navigate("/login");
+    } catch (error) {
+      console.error("Logout failed", error);
+    }
+  };
+
+  const handelSelectedUser = (id) => {
+    const selected = filteredUsers.find((u) => {
+      return u._id === id;
+    });
+    setSelectedUser(id);
+    setShowRecieverDetailPopUp(true);
+    setrecieverDetail(selected);
+  };
+
+  //..........................................................
 
   return (
     <div className="flex min-h-screen bg-gray-100">
@@ -150,32 +227,8 @@ function Dashboard() {
         )}
       </aside>{" "}
       {/* Main Content */}
-      {selectedUser || reciveCall || callAccepted ? (
+      {selectedUser ? (
         <div className="relative w-full h-screen bg-black flex items-center justify-center">
-          {/* Remote Video */}
-          {callerWating ? (
-            <div>
-              <div className="flex flex-col items-center">
-                <p className="font-black text-xl mb-2">User Details</p>
-                <img
-                  src={modalUser.profilepic || "/default-avatar.png"}
-                  alt="User"
-                  className="w-20 h-20 rounded-full border-4 border-blue-500 animate-bounce"
-                />
-                <h3 className="text-lg font-bold mt-3 text-white">
-                  {modalUser.username}
-                </h3>
-                <p className="text-sm text-gray-300">{modalUser.email}</p>
-              </div>
-            </div>
-          ) : (
-            <video
-              ref={reciverVideo}
-              autoPlay
-              className="absolute top-0 left-0 w-full h-full object-contain rounded-lg"
-            />
-          )}
-          {/* Local PIP Video */}
           <div className="absolute bottom-[75px] md:bottom-0 right-1 bg-gray-900 rounded-lg overflow-hidden shadow-lg">
             <video
               ref={myVideo}
@@ -195,42 +248,6 @@ function Dashboard() {
               <FaBars />
             </button>
             {callerName || "Caller"}
-          </div>
-
-          {/* Call Controls */}
-          <div className="absolute bottom-4 w-full flex justify-center gap-4">
-            <button
-              type="button"
-              className="bg-red-600 p-4 rounded-full text-white shadow-lg cursor-pointer"
-              onClick={handelendCall}
-            >
-              <FaPhoneSlash size={24} />
-            </button>
-            {/* 🎤 Toggle Mic */}
-            <button
-              type="button"
-              onClick={toggleMic}
-              className={`p-4 rounded-full text-white shadow-lg cursor-pointer transition-colors ${
-                isMicOn ? "bg-green-600" : "bg-red-600"
-              }`}
-            >
-              {isMicOn ? (
-                <FaMicrophone size={24} />
-              ) : (
-                <FaMicrophoneSlash size={24} />
-              )}
-            </button>
-
-            {/* 📹 Toggle Video */}
-            <button
-              type="button"
-              onClick={toggleCam}
-              className={`p-4 rounded-full text-white shadow-lg cursor-pointer transition-colors ${
-                isCamOn ? "bg-green-600" : "bg-red-600"
-              }`}
-            >
-              {isCamOn ? <FaVideo size={24} /> : <FaVideoSlash size={24} />}
-            </button>
           </div>
         </div>
       ) : (
@@ -271,6 +288,44 @@ function Dashboard() {
               <li>🔍 Use the search bar to find a specific person.</li>
               <li>🎥 Click on a user to start a video call instantly!</li>
             </ul>
+          </div>
+        </div>
+      )}
+      {/*call user pop up */}
+      {showRecieverDetailPopUp && recieverDetail && (
+        <div className="fixed inset-0 bg-transparent bg-opacity-30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-lg max-w-md w-full p-6">
+            <div className="flex flex-col items-center">
+              <p className="font-black text-xl mb-2">User Details</p>
+              <img
+                src={recieverDetail.profileImg || "/default-avatar.png"}
+                alt="User"
+                className="w-20 h-20 rounded-full border-4 border-blue-500"
+              />
+              <h3 className="text-lg font-bold mt-3">
+                {recieverDetail.username}
+              </h3>
+              <p className="text-sm text-gray-500">{recieverDetail.email}</p>
+
+              <div className="flex gap-4 mt-5">
+                <button
+                  onClick={() => {
+                    setSelectedUser(recieverDetail._id);
+                    startCall(); // function that handles media and calling
+                    setShowRecieverDetailPopUp(false);
+                  }}
+                  className="bg-green-600 text-white px-4 py-1 rounded-lg w-28 flex items-center gap-2 justify-center"
+                >
+                  Call <FaPhoneAlt />
+                </button>
+                <button
+                  onClick={() => setShowRecieverDetailPopUp(false)}
+                  className="bg-gray-400 text-white px-4 py-1 rounded-lg w-28"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

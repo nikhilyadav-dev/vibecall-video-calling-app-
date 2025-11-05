@@ -1,7 +1,7 @@
 import express from "express";
 import { createServer } from "http";
 import cors from "cors";
-import connectToSoket from "./controllers/soketManager.js";
+import { Server } from "socket.io";
 import dotenv from "dotenv";
 import dbConnection from "./db/dbConnection.js";
 import cookieParser from "cookie-parser";
@@ -10,12 +10,11 @@ import cookieParser from "cookie-parser";
 
 import authRoute from "./routes/authRoute.js";
 import userRoute from "./routes/userRoute.js";
+import { use } from "react";
 
 //...........................................................
 
 const app = express();
-const server = createServer(app);
-const io = connectToSoket(server);
 
 //...........................................................
 
@@ -36,6 +35,18 @@ app.use(
 
 //...........................................................
 
+const server = createServer(app);
+const io = new Server(server, {
+  pingTimeout: 60000,
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"],
+  },
+});
+console.log("[SUCCESS] Socket.io initialized with CORS");
+
+//...........................................................
+
 app.use(express.urlencoded({ limit: "40kb", extended: true }));
 app.use(express.json({ limit: "40kb" }));
 app.set("port", 8000);
@@ -52,6 +63,61 @@ app.get("/", (req, res) => {
 
 //...........................................................
 
+let onlineUsers = [];
+const activeCalls = new Map();
+
+io.on("connection", (soket) => {
+  console.log("New connection", soket.id);
+
+  soket.emit("me", soket.id);
+
+  soket.on("join", (user) => {
+    if (!user || !user.id) {
+      console.log("invalid user data on join");
+      return;
+    }
+
+    soket.join(user.id);
+    const existingUser = onlineUsers.find((u) => {
+      return u.userId === user.id;
+    });
+    if (existingUser) {
+      existingUser.soketId = soket.id;
+    } else {
+      onlineUsers.push({
+        userId: user.id,
+        name: user.name,
+        soketId: soket.id,
+      });
+
+      io.emit("online-users", onlineUsers);
+    }
+  });
+
+  soket.on("disconnect", () => {
+    const user = onlineUsers.find((u) => {
+      return u.soketId === soket.is;
+    });
+    if (user) {
+      activeCalls.remove(user.userId);
+
+      for (const [key, value] of activeCalls.entries()) {
+        if (value.with === user.userId) activeCalls.delete(key);
+      }
+    }
+
+    onlineUsers = onlineUsers.filter((u) => {
+      return u.soketId !== soket.id;
+    });
+
+    io.emit("online-users", onlineUsers);
+    soket.broadcast.emit("Disconnected user", soket.id);
+    console.log("Disconnected user", soket.id);
+  });
+});
+
+//...........................................................
+
 const start = async () => {
   try {
     await dbConnection();
@@ -64,3 +130,15 @@ const start = async () => {
 };
 
 start();
+
+//user1
+
+// nikhilyadav.prof@gmail.com
+// Manthan20
+// nikhil2004
+
+//user2
+
+// ny@gmail.com
+// NikhilYadu
+// nikhil2004

@@ -42,9 +42,8 @@ function Auth({ type }) {
         updateUser(response.data);
         const date = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
         const expires = "expires=" + date.toUTCString();
-        document.cookie = `jwt=${response.data.token}; path=/; ${expires}`;
+        document.cookie = `token=${response.data.token}; path=/; ${expires}`;
         console.log("working login");
-        88888888888888888888889;
         navigate("/");
       }
     } catch (error) {

@@ -3,10 +3,10 @@ import User from "../schema/userSchema.js";
 export const isLoggedIn = async (req, res, next) => {
   try {
     const token =
-      req.cookies.jwt ||
+      req.cookies.token ||
       req.headers.cookie
         .split("; ")
-        .find((cookie) => cookie.startsWith("jwt="))
+        .find((cookie) => cookie.startsWith("token="))
         ?.split("=")[1];
     if (!token)
       return res
