@@ -1,7 +1,6 @@
 import User from "../schema/userSchema.js";
 
 export const getAllUsers = async (req, res) => {
-  console.log("call recieved");
   const currentUserId = req.user._id;
   if (!currentUserId) {
     return res.status(500).send({ success: false, message: "Unauthorized" });

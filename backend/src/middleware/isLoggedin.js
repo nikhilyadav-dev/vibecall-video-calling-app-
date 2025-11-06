@@ -19,7 +19,7 @@ export const isLoggedIn = async (req, res, next) => {
     }
 
     const user = await User.findById(decode.userId).select("-password");
-    console.log(user);
+
     if (!user)
       return res
         .status(500)

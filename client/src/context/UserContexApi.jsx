@@ -5,6 +5,7 @@ export const UserProvider = ({ children }) => {
     const storedUser = localStorage.getItem("userData");
     return storedUser ? JSON.parse(storedUser) : null;
   });
+  // console.log("user", user);
   let [loading, setLoading] = useState(false);
   useEffect(() => {
     setLoading(true);

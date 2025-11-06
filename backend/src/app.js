@@ -114,6 +114,31 @@ io.on("connection", (soket) => {
     soket.broadcast.emit("Disconnected user", soket.id);
     console.log("Disconnected user", soket.id);
   });
+
+  soket.on("callToUser", (data) => {
+    let call = onlineUsers.find((u) => {
+      return data.callToUserId === u.userId;
+    });
+    if (!call) {
+      soket.emit("userUnavailable", { message: "User is offline" });
+      return;
+    }
+
+    io.to(data.callToUserId).emit("callToUser", {
+      signal: data.signalData,
+      from: data.from,
+      name: data.name,
+      email: data.email,
+      profileImg: data.profileImg,
+    });
+  });
+
+  soket.on("reject-call", (data) => {
+    io.to(data.to).emit("reject-call", {
+      name: data.name,
+      profileImg: data.profileImg,
+    });
+  });
 });
 
 //...........................................................
