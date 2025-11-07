@@ -11,6 +11,7 @@ import cookieParser from "cookie-parser";
 import authRoute from "./routes/authRoute.js";
 import userRoute from "./routes/userRoute.js";
 import { use } from "react";
+import { Socket } from "dgram";
 
 //...........................................................
 
@@ -66,37 +67,37 @@ app.get("/", (req, res) => {
 let onlineUsers = [];
 const activeCalls = new Map();
 
-io.on("connection", (soket) => {
-  console.log("New connection", soket.id);
+io.on("connection", (socket) => {
+  console.log("New connection", socket.id);
 
-  soket.emit("me", soket.id);
+  socket.emit("me", socket.id);
 
-  soket.on("join", (user) => {
+  socket.on("join", (user) => {
     if (!user || !user.id) {
       console.log("invalid user data on join");
       return;
     }
 
-    soket.join(user.id);
+    socket.join(user.id);
     const existingUser = onlineUsers.find((u) => {
       return u.userId === user.id;
     });
     if (existingUser) {
-      existingUser.soketId = soket.id;
+      existingUser.socketId = socket.id;
     } else {
       onlineUsers.push({
         userId: user.id,
         name: user.name,
-        soketId: soket.id,
+        socketId: socket.id,
       });
 
       io.emit("online-users", onlineUsers);
     }
   });
 
-  soket.on("disconnect", () => {
+  socket.on("disconnect", () => {
     const user = onlineUsers.find((u) => {
-      return u.soketId === soket.is;
+      return u.socketId === socket.is;
     });
     if (user) {
       activeCalls.remove(user.userId);
@@ -107,20 +108,20 @@ io.on("connection", (soket) => {
     }
 
     onlineUsers = onlineUsers.filter((u) => {
-      return u.soketId !== soket.id;
+      return u.socketId !== socket.id;
     });
 
     io.emit("online-users", onlineUsers);
-    soket.broadcast.emit("Disconnected user", soket.id);
-    console.log("Disconnected user", soket.id);
+    socket.broadcast.emit("Disconnected user", socket.id);
+    console.log("Disconnected user", socket.id);
   });
 
-  soket.on("callToUser", (data) => {
+  socket.on("callToUser", (data) => {
     let call = onlineUsers.find((u) => {
       return data.callToUserId === u.userId;
     });
     if (!call) {
-      soket.emit("userUnavailable", { message: "User is offline" });
+      socket.emit("userUnavailable", { message: "User is offline" });
       return;
     }
 
@@ -133,10 +134,18 @@ io.on("connection", (soket) => {
     });
   });
 
-  soket.on("reject-call", (data) => {
+  socket.on("reject-call", (data) => {
     io.to(data.to).emit("reject-call", {
       name: data.name,
       profileImg: data.profileImg,
+    });
+  });
+
+  socket.on("answredCall", (data) => {
+    console.log("answercall is working backend side", data);
+    io.to(data.to).emit("callAccepted", {
+      from: data.from,
+      signal: data.signal,
     });
   });
 });

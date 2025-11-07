@@ -52,8 +52,11 @@ function Dashboard() {
 
   //..........................................................
 
+  //SOCKET CODE
+
   const socket = getSocket();
 
+  //Socket
   useEffect(() => {
     if (user && socket && !hasJoined.current) {
       socket.emit("join", { id: user._id, name: user.username });
@@ -86,18 +89,22 @@ function Dashboard() {
     };
   }, [socket, user]);
 
+  //isOnline Feature
   const isOnlineUser = (userId) => userOnline.some((u) => u.userId === userId);
 
+  //Start Call Feature
   const startCall = async () => {
     try {
       const currentStream = await navigator.mediaDevices.getUserMedia({
-        video: false,
+        video: true,
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
         },
       });
+
       setStream(currentStream);
+
       if (myVideo.current) {
         myVideo.current.srcObject = currentStream;
         myVideo.current.muted = true;
@@ -123,14 +130,43 @@ function Dashboard() {
         });
       });
 
+      socket.on("callAccepted", (data) => {
+        peer.signal(data.signal);
+        setCallAccepted(true);
+        setCallRejectedPopUp(false);
+        setCaller(data.from);
+      });
+
+      peer.on("stream", (remoteStream) => {
+        console.log("caller side stream recived", remoteStream);
+        if (reciverVideo.current) {
+          reciverVideo.current.srcObject = remoteStream;
+          reciverVideo.current.muted = false;
+          reciverVideo.current.volume = 1.0;
+        } else {
+          // If ref not yet ready, attach later
+          setTimeout(() => {
+            if (reciverVideo.current) {
+              reciverVideo.current.srcObject = remoteStream;
+            }
+          }, 500);
+        }
+      });
+
       connectionRef.current = peer;
+      setCallRejectedPopUp(false);
+      setIsSidebarOpen(false);
+      setSelectedUser(recieverDetail._id);
+      setShowRecieverDetailPopUp(false);
     } catch (error) {
       console.error("Error accessing media devices:", error);
     }
   };
 
+  //Reject Call Feature
   const handelrejectCall = () => {
     setReciveCall(false);
+    setCallAccepted(false);
     socket.emit("reject-call", {
       to: caller.from,
       name: user.username,
@@ -138,7 +174,85 @@ function Dashboard() {
     });
   };
 
+  //Accept Call Feature
+  const handelacceptCall = async () => {
+    try {
+      const currentStream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+        },
+      });
+      setStream(currentStream);
+
+      const waitForVideoRef = setInterval(() => {
+        if (myVideo.current) {
+          clearInterval(waitForVideoRef);
+          myVideo.current.srcObject = currentStream;
+          myVideo.current.muted = true;
+          myVideo.current.volume = 0;
+          myVideo.current.play().catch(console.warn);
+        }
+      }, 300);
+
+      // setTimeout(() => {
+      //   console.log("set timeout working");
+      //   if (myVideo.current) {
+      //     myVideo.current.srcObject = currentStream;
+      //     myVideo.current.muted = true;
+      //     myVideo.current.volume = 0;
+      //     console.log("reciever side", myVideo);
+      //   }
+      // }, 1000);
+
+      currentStream.getAudioTracks().forEach((track) => (track.enabled = true));
+
+      const peer = new Peer({
+        initiator: false,
+        trickle: false,
+        stream: currentStream,
+      });
+
+      peer.on("signal", (data) => {
+        socket.emit("answredCall", {
+          signal: data,
+          from: me,
+          to: caller.from,
+        });
+      });
+
+      if (callerSignal) {
+        peer.signal(callerSignal);
+      }
+
+      peer.on("stream", (remoteStream) => {
+        console.log("got stream from caller", remoteStream);
+        if (reciverVideo.current) {
+          reciverVideo.current.srcObject = remoteStream;
+          reciverVideo.current.muted = false;
+          reciverVideo.current.volume = 1.0;
+        } else {
+          // If ref not yet ready, attach later
+          setTimeout(() => {
+            if (reciverVideo.current) {
+              reciverVideo.current.srcObject = remoteStream;
+            }
+          }, 500);
+        }
+      });
+
+      setCallAccepted(true);
+      setIsSidebarOpen(false);
+      setReciveCall(true);
+    } catch (error) {
+      console.error("Error accessing media devices:", error);
+    }
+  };
+
   //..........................................................
+
+  //UI Logic
 
   const filteredUsers = users.filter(
     (u) =>
@@ -274,8 +388,16 @@ function Dashboard() {
         )}
       </aside>{" "}
       {/* Main Content */}
-      {selectedUser ? (
+      {selectedUser || callAccepted ? (
         <div className="relative w-full h-screen bg-black flex items-center justify-center">
+          {/*ReciverVideo Video UI*/}
+          <video
+            ref={reciverVideo}
+            autoPlay
+            className="absolute top-0 left-0 w-full h-full object-contain rounded-lg"
+          />
+
+          {/*My Video UI*/}
           <div className="absolute bottom-[75px] md:bottom-0 right-1 bg-gray-900 rounded-lg overflow-hidden shadow-lg">
             <video
               ref={myVideo}
@@ -392,7 +514,7 @@ function Dashboard() {
               <div className="flex gap-4 mt-5">
                 <button
                   type="button"
-                  //onClick={handelacceptCall}
+                  onClick={handelacceptCall}
                   className="bg-green-500 text-white px-4 py-1 rounded-lg w-28 flex gap-2 justify-center items-center"
                 >
                   Accept <FaPhoneAlt />
