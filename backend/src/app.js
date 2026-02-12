@@ -148,6 +148,12 @@ io.on("connection", (socket) => {
       signal: data.signal,
     });
   });
+
+  socket.on("call-ended", (data) => {
+    io.to(data.to).emit("call-ended", {
+      name: data.from,
+    });
+  });
 });
 
 //...........................................................

@@ -9,7 +9,7 @@ import {
   FaMicrophoneSlash,
 } from "react-icons/fa";
 import { userUser } from "../../context/UserContexApi";
-import { useState, useEffect } from "react";
+import { useState, useEffect, use } from "react";
 import { RiLogoutBoxLine } from "react-icons/ri";
 import Lottie from "lottie-react";
 import wavingAnimation from "../../assets/waving.json";
@@ -50,6 +50,9 @@ function Dashboard() {
   const [callRejectedPopUp, setCallRejectedPopUp] = useState(false);
   const [callRejectedByUser, setCallRejectedByUser] = useState(null);
 
+  const [isMicOn, setIsMicOn] = useState(true);
+  const [isCamOn, setIsCamOn] = useState(true);
+
   //..........................................................
 
   //SOCKET CODE
@@ -81,6 +84,11 @@ function Dashboard() {
     socket.on("reject-call", (data) => {
       setCallRejectedPopUp(true);
       setCallRejectedByUser(data);
+    });
+
+    socket.on("call-ended", (data) => {
+      console.log("call ended working for caller");
+      endCallCleanup();
     });
 
     return () => {
@@ -242,12 +250,70 @@ function Dashboard() {
         }
       });
 
+      connectionRef.current = peer;
       setCallAccepted(true);
       setIsSidebarOpen(false);
       setReciveCall(true);
     } catch (error) {
       console.error("Error accessing media devices:", error);
     }
+  };
+
+  //MIC Toggler
+
+  const toggleMic = () => {
+    if (stream) {
+      const audioTrack = stream.getAudioTracks()[0];
+      if (audioTrack) {
+        audioTrack.enabled = !isMicOn;
+        setIsMicOn(audioTrack.enabled);
+      }
+    }
+  };
+
+  //Camera Toggler
+
+  const toggleCam = () => {
+    if (stream) {
+      const videoTrack = stream.getVideoTracks()[0];
+      if (videoTrack) {
+        videoTrack.enabled = !isCamOn;
+        setIsCamOn(videoTrack.enabled);
+      }
+    }
+  };
+
+  //Handle Call End
+
+  const handelendCall = () => {
+    socket.emit("call-ended", {
+      to: caller.from,
+      from: user.username,
+    });
+    endCallCleanup();
+  };
+
+  const endCallCleanup = () => {
+    if (stream) {
+      stream.getTracks().forEach((track) => track.stop());
+    }
+
+    if (reciveCall.current) {
+      reciverVideo.current.srcObject = null;
+    }
+
+    if (myVideo.current) {
+      myVideo.current.srcObject = null;
+    }
+
+    connectionRef.current.destroy();
+    setStream(null);
+    setSelectedUser(false);
+    setCallAccepted(false);
+    setReciveCall(false);
+    setTimeout(() => {
+      window.location.reload();
+    }, 100);
   };
 
   //..........................................................
@@ -417,6 +483,41 @@ function Dashboard() {
               <FaBars />
             </button>
             {callerName || "Caller"}
+          </div>
+          {/* Call Controls */}
+          <div className="absolute bottom-4 w-full flex justify-center gap-4">
+            <button
+              type="button"
+              className="bg-red-600 p-4 rounded-full text-white shadow-lg cursor-pointer"
+              onClick={handelendCall}
+            >
+              <FaPhoneSlash size={24} />
+            </button>
+            {/* 🎤 Toggle Mic */}
+            <button
+              type="button"
+              onClick={toggleMic}
+              className={`p-4 rounded-full text-white shadow-lg cursor-pointer transition-colors ${
+                isMicOn ? "bg-green-600" : "bg-red-600"
+              }`}
+            >
+              {isMicOn ? (
+                <FaMicrophone size={24} />
+              ) : (
+                <FaMicrophoneSlash size={24} />
+              )}
+            </button>
+
+            {/* 📹 Toggle Video */}
+            <button
+              type="button"
+              onClick={toggleCam}
+              className={`p-4 rounded-full text-white shadow-lg cursor-pointer transition-colors ${
+                isCamOn ? "bg-green-600" : "bg-red-600"
+              }`}
+            >
+              {isCamOn ? <FaVideo size={24} /> : <FaVideoSlash size={24} />}
+            </button>
           </div>
         </div>
       ) : (
